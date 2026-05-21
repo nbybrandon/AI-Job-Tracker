@@ -14,7 +14,8 @@ FILE_NAME = "my_applications.csv"
 if not os.path.exists(FILE_NAME):
     st.warning("No data found! Please run tracker.py to add some applications first.")
 else:
-    df = pd.read_csv(FILE_NAME)
+    # on_bad_lines='skip' acts as a defensive guardrail to prevent malformed rows from crashing the app
+    df = pd.read_csv(FILE_NAME, on_bad_lines='skip')
     df.columns = df.columns.str.strip()
     
     # --- AUTOMATED AGING CALCULATIONS ---
@@ -38,7 +39,7 @@ else:
         st.error(f"⚠️ PROACTIVE ALERT: {len(stagnant_df)} Stagnant Applications Detected (>7 Days Without Touchpoints)")
         with st.expander("Click to view companies requiring follow-up action sequences", expanded=True):
             display_stagnant = stagnant_df[['Company', 'Role', 'Date Applied', 'Days Elapsed', 'Notes']].copy()
-            display_stagnant['Date Applied'] = display_stagnant['Date Applied'].dt.strftime('%Y-%m-%d')
+            display_stagnant['Date Applied'] = display_stagnant['Date Applied'].dt.strftime('%Y-%m-%d').fillna('N/A')
             st.dataframe(display_stagnant, use_container_width=True, hide_index=True)
         st.markdown("---")
 
@@ -48,8 +49,7 @@ else:
     
     total_apps = len(df)
     interviewing = len(df[df['Status'].str.contains('Interview', case=False, na=False)])
-    # Waiting aggregates newly applied, standard waiting, and active follow-up statuses
-    waiting = len(df[df['Status'].str.strip().isin(['Applied', 'Waiting on Reply', 'Follow Up'])])
+    waiting = len(df[df['Status'].str.strip().isin(['Applied', 'Waiting on Reply', 'Follow Up', 'Followed Up'])])
     no_response = len(df[df['Status'].str.strip() == 'No Response'])
     
     col1.metric("Total Applications", total_apps)
@@ -65,7 +65,7 @@ else:
     
     display_df = df.copy()
     if 'Date Applied' in display_df.columns and pd.api.types.is_datetime64_any_dtype(display_df['Date Applied']):
-        display_df['Date Applied'] = display_df['Date Applied'].dt.strftime('%Y-%m-%d')
+        display_df['Date Applied'] = display_df['Date Applied'].dt.strftime('%Y-%m-%d').fillna('N/A')
         
     if 'Days Elapsed' in display_df.columns:
         display_df = display_df.drop(columns=['Days Elapsed'])

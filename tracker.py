@@ -126,4 +126,40 @@ def main():
             save_to_csv(payload)
             
         elif choice == "2":
-            print("\n--- Local LLM Automated Email Parser ---
+            print("\n--- Local LLM Automated Email Parser ---")
+            print("Paste your email content below. Type 'done' on a blank new line and press Enter to process:\n")
+            
+            email_lines = []
+            while True:
+                try:
+                    line = input()
+                    if line.strip().lower() == "done":
+                        break
+                    email_lines.append(line)
+                except (EOFError, KeyboardInterrupt):
+                    break
+            
+            email_content = "\n".join(email_lines)
+            
+            if email_content.strip():
+                extracted_payload = parse_email_with_llm(email_content)
+                if extracted_payload:
+                    print("\nExtracted Ingestion Struct:")
+                    print(json.dumps(extracted_payload, indent=4))
+                    confirm = input("\nCommit this data state to file database? (y/n): ").strip().lower()
+                    if confirm == 'y':
+                        save_to_csv(extracted_payload)
+                    else:
+                        print("⚠️ Ingestion stream aborted by operator.")
+            else:
+                print("❌ Input validation error: Empty payload detected.")
+                
+        elif choice == "3":
+            print("\n👋 Terminating ingestion matrix interface. Core dataset changes saved. Goodbye!\n")
+            break
+            
+        else:
+            print("\n❌ Runtime Selection Error: Unrecognized index sequence. Please select 1, 2, or 3.")
+
+if __name__ == "__main__":
+    main()

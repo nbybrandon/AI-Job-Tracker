@@ -97,7 +97,6 @@ def main():
     print("     🤖 CORE SYSTEM INITIALIZED: APPLICATION DATA INGESTION CLI 🤖")
     print("=" * 60)
     
-    # Run historical aging review once when application initializes
     run_aging_analysis()
     
     while True:
@@ -105,9 +104,10 @@ def main():
         print("Select Operation Mode:")
         print("[1] Manual Structured Form Entry")
         print("[2] Local LLM Automated Email Parser")
-        print("[3] Exit System")
+        print("[3] Update Application Status (e.g., Follow Up)")
+        print("[4] Exit System")
         print("=" * 50)
-        choice = input("Enter execution mode index (1, 2, or 3): ").strip()
+        choice = input("Enter execution mode index (1, 2, 3, or 4): ").strip()
         
         if choice == "1":
             print("\n--- Manual Structured Form Entry ---")
@@ -155,11 +155,66 @@ def main():
                 print("❌ Input validation error: Empty payload detected.")
                 
         elif choice == "3":
+            print("\n--- Update Application Status ---")
+            if not os.path.exists(FILE_NAME):
+                print("❌ Database empty. No entries available to modify.")
+                continue
+                
+            try:
+                df = pd.read_csv(FILE_NAME)
+                df.columns = df.columns.str.strip()
+                
+                print("\nCurrent Applications Inventory:")
+                print(f"{'INDEX':<6} | {'COMPANY':<35} | {'ROLE':<35} | {'STATUS':<20}")
+                print("-" * 110)
+                for idx, row in df.iterrows():
+                    print(f"[{idx:<3}] | {str(row['Company'])[:33]:<35} | {str(row['Role'])[:33]:<35} | {str(row['Status']):<20}")
+                print("-" * 110)
+                
+                selected_idx = input("\nEnter the number index of the application to update: ").strip()
+                if selected_idx.isdigit() and int(selected_idx) in df.index:
+                    idx = int(selected_idx)
+                    old_status = df.at[idx, 'Status']
+                    
+                    print(f"\nSelected Target: {df.at[idx, 'Company']} ({df.at[idx, 'Role']})")
+                    print("Select New Status:")
+                    print("[1] Follow Up")
+                    print("[2] Interview Scheduled")
+                    print("[3] Waiting on Reply")
+                    print("[4] No Response")
+                    print("[5] Custom Status Entry")
+                    status_choice = input("Enter choice (1-5) [Default: 1]: ").strip()
+                    
+                    new_status = "Follow Up"
+                    if status_choice == "2":
+                        new_status = "Interview Scheduled"
+                    elif status_choice == "3":
+                        new_status = "Waiting on Reply"
+                    elif status_choice == "4":
+                        new_status = "No Response"
+                    elif status_choice == "5":
+                        new_status = input("Enter custom status: ").strip()
+                    
+                    df.at[idx, 'Status'] = new_status
+                    
+                    # Programmatically log follow-up execution timestamps into notes history
+                    today_str = datetime.now().strftime('%Y-%m-%d')
+                    current_notes = str(df.at[idx, 'Notes']) if pd.notna(df.at[idx, 'Notes']) else ""
+                    df.at[idx, 'Notes'] = f"{current_notes} | Followed up on {today_str}".strip(" | ")
+                    
+                    df.to_csv(FILE_NAME, index=False)
+                    print(f"✅ Success! {df.at[idx, 'Company']} shifted from '{old_status}' to '{new_status}'.")
+                else:
+                    print("❌ Index processing boundary exception. Aborting update operation.")
+            except Exception as e:
+                print(f"❌ Status Pipeline Failure: {e}")
+                
+        elif choice == "4":
             print("\n👋 Terminating ingestion matrix interface. Core dataset changes saved. Goodbye!\n")
             break
             
         else:
-            print("\n❌ Runtime Selection Error: Unrecognized index sequence. Please select 1, 2, or 3.")
+            print("\n❌ Runtime Selection Error: Unrecognized index sequence. Please select 1, 2, 3, or 4.")
 
 if __name__ == "__main__":
     main()

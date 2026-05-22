@@ -17,7 +17,7 @@ def run_aging_analysis():
         return
 
     try:
-        df = pd.read_csv(FILE_NAME)
+        df = pd.read_csv(FILE_NAME, on_bad_lines='skip')
         df.columns = df.columns.str.strip()
         
         df['Date Applied'] = pd.to_datetime(df['Date Applied'], errors='coerce')
@@ -46,28 +46,34 @@ def run_aging_analysis():
     except Exception as e:
         print(f"\n⚠️ Analytics Warning: Could not execute aging check matrices: {e}")
 
-def parse_email_with_llm(email_text):
+def parse_email_with_llm(subject, email_text):
     """
-    Sends raw email text to local Ollama inference engine to parse structured JSON
+    Sends both email subject line and raw body text to local Ollama inference engine
+    to reliably extract structured JSON parameters without missing the company name.
     """
     prompt = f"""
-    You are an expert HR data parsing engine. Analyze this raw application email text and extract the exact parameters.
+    You are an expert HR data parsing engine. Analyze the provided email subject line and raw text body to extract the exact parameters.
+    The company name or job title might be explicitly located inside the [SUBJECT LINE]. Look there carefully for reference context.
+    
     You must output your response in strict valid JSON format with exactly these 5 keys:
     {{
-        "Company": "Full corporate name",
+        "Company": "Full corporate name (Clean up trailing descriptors like Limited or Ltd)",
         "Role": "Official job title or position name",
         "Status": "Applied",
         "Date Applied": "{datetime.now().strftime('%Y-%m-%d')}",
-        "Notes": "Summarize the submission email used or core highlights"
+        "Notes": "Summarize the submission email used or key highlights from the text"
     }}
     
-    Do not add any prose, markdown blocks, or commentary outside the JSON object.
+    Do not add any prose, markdown blocks, code blocks, or commentary outside the raw JSON object.
     
-    Email Text:
+    Contextual Inputs:
+    [SUBJECT LINE]: {subject}
+    
+    [EMAIL BODY TEXT]:
     {email_text}
     """
     
-    print("\n🤖 Booting local inference engine... parsing unstructured metrics...")
+    print("\n🤖 Booting local inference engine... parsing unstructured metadata metrics...")
     try:
         response = requests.post(OLLAMA_URL, json={
             "model": "llama3",
@@ -83,13 +89,13 @@ def parse_email_with_llm(email_text):
 
 def save_to_csv(data_dict):
     """
-    Safely appends a flat data row into the standard database schema
+    Safely appends a flat data row into the standard database schema, wrapping fields in quotes.
     """
     new_row = pd.DataFrame([data_dict])
     if not os.path.exists(FILE_NAME):
-        new_row.to_csv(FILE_NAME, index=False)
+        new_row.to_csv(FILE_NAME, index=False, encoding='utf-8')
     else:
-        new_row.to_csv(FILE_NAME, mode='a', header=False, index=False)
+        new_row.to_csv(FILE_NAME, mode='a', header=False, index=False, encoding='utf-8')
     print(f"📂 State Storage Synchronized! Added entry for: {data_dict['Company']}")
 
 def main():
@@ -103,7 +109,7 @@ def main():
         print("\n" + "=" * 50)
         print("Select Operation Mode:")
         print("[1] Manual Structured Form Entry")
-        print("[2] Local LLM Automated Email Parser")
+        print("[2] Local LLM Automated Email Parser (Subject + Body Context)")
         print("[3] Update Application Status (e.g., Follow Up)")
         print("[4] Exit System")
         print("=" * 50)
@@ -127,7 +133,11 @@ def main():
             
         elif choice == "2":
             print("\n--- Local LLM Automated Email Parser ---")
-            print("Paste your email content below. Type 'done' on a blank new line and press Enter to process:\n")
+            # Step 1: Capture the high-signal Subject Line metadata context
+            subject_input = input("Step 1: Paste/Type Email Subject Line: ").strip()
+            
+            # Step 2: Capture the multi-line text body
+            print("\nStep 2: Paste your email body below. Type 'done' on a blank new line and press Enter to process:\n")
             
             email_lines = []
             while True:
@@ -141,8 +151,8 @@ def main():
             
             email_content = "\n".join(email_lines)
             
-            if email_content.strip():
-                extracted_payload = parse_email_with_llm(email_content)
+            if subject_input or email_content.strip():
+                extracted_payload = parse_email_with_llm(subject_input, email_content)
                 if extracted_payload:
                     print("\nExtracted Ingestion Struct:")
                     print(json.dumps(extracted_payload, indent=4))
@@ -161,7 +171,7 @@ def main():
                 continue
                 
             try:
-                df = pd.read_csv(FILE_NAME)
+                df = pd.read_csv(FILE_NAME, on_bad_lines='skip')
                 df.columns = df.columns.str.strip()
                 
                 print("\nCurrent Applications Inventory:")
@@ -197,12 +207,11 @@ def main():
                     
                     df.at[idx, 'Status'] = new_status
                     
-                    # Programmatically log follow-up execution timestamps into notes history
                     today_str = datetime.now().strftime('%Y-%m-%d')
                     current_notes = str(df.at[idx, 'Notes']) if pd.notna(df.at[idx, 'Notes']) else ""
                     df.at[idx, 'Notes'] = f"{current_notes} | Followed up on {today_str}".strip(" | ")
                     
-                    df.to_csv(FILE_NAME, index=False)
+                    df.to_csv(FILE_NAME, index=False, encoding='utf-8')
                     print(f"✅ Success! {df.at[idx, 'Company']} shifted from '{old_status}' to '{new_status}'.")
                 else:
                     print("❌ Index processing boundary exception. Aborting update operation.")

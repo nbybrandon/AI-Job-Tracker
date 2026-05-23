@@ -14,114 +14,130 @@ A private, entirely offline Full-Stack Python application that leverages localiz
 
 ## 💡 System Architecture & Design Choices
 
-Managing a high volume of internship applications (60+) across multiple tech stacks introduces a substantial data tracking bottleneck. Manual data logging is inefficient, while traditional cloud-based LLM APIs (like OpenAI or Groq) present data privacy concerns, rate limits, and structural geoblocking within the Hong Kong region. 
+Managing a high volume of internship applications (60+) across multiple tech stacks introduces a substantial data tracking bottleneck. Manual data logging is inefficient, while traditional cloud-based LLM APIs (like OpenAI) present data privacy concerns and rate limits.
 
-To circumvent these friction points, this architecture is decoupled into a **Local AI Ingestion Engine** and an **Interactive Analytics Frontend**, operating completely offline on localized hardware.
+This architecture is decoupled into a **Local AI Ingestion Engine** and an **Interactive Analytics Frontend**, operating completely offline.
 
 ```text
-   [Unstructured Text Ingestion]
-                │
-                ▼
-      ┌───────────────────┐
-      │    tracker.py     │ (CLI Client)
-      └─────────┬─────────┘
-                │ (POST Request / localhost:11434)
-                ▼
-      ┌───────────────────┐
-      │  Ollama Engine    │ (Local Inference: Llama 3 / Phi-3)
-      └─────────┬─────────┘
-                │ (Strict Structural JSON Payload)
-                ▼
-      ┌───────────────────┐
-      │my_applications.csv│ (Flat-File Storage State)
-      └─────────┬─────────┘
-                │ (Pandas Dataframe Query)
-                ▼
-      ┌───────────────────┐
-      │   dashboard.py    │ (Streamlit Web Dashboard)
-      └───────────────────┘
-
+   [Manual Input]      [Email Drafts/Burner Inbox]
+          │                     │
+          ▼                     ▼
+   ┌────────────┐        ┌──────────────────┐
+   │ tracker.py │        │email_listener.py │
+   └──────┬─────┘        └────────┬─────────┘
+          │                       │
+          └───────────┬───────────┘
+                      │ (POST Request / localhost:11434)
+                      ▼
+            ┌───────────────────┐
+            │    Ollama Engine  │ (Local Inference: Llama 3 / Phi-3)
+            └─────────┬─────────┘
+                      │ (Strict Structural JSON Payload)
+                      ▼
+            ┌───────────────────┐
+            │my_applications.csv│ (Flat-File Storage State)
+            └─────────┬─────────┘
+                      │ (Pandas Dataframe Query)
+                      ▼
+            ┌───────────────────┐
+            │   dashboard.py    │ (Streamlit Web Dashboard)
+            └───────────────────┘
 ```
+
 ---
 
 ## ✨ Core Engineering Features
 
-### 1. Localized NLP Parsing Strategy
-The application utilizes a local HTTP pipeline connecting to **Ollama**. Through structural prompt engineering constraints (`format="json"` API payload optimization), a local LLM instances (Llama 3 or Phi-3 mini) parses unformatted, raw text email drafts. It programmatically extracts key enterprise profiles, targeted engineering roles, and main skills summaries into clean, structured JSON data states.
+### 1. Multi-Channel Data Ingestion
+*   **CLI Tracker:** Direct text entry or manual logging via `tracker.py`.
+*   **Automated Email Listener:** Connects to a dedicated "burner" inbox via IMAP to automatically fetch and parse application confirmation emails.
 
-### 2. Automated Application Aging Matrix
-To eliminate stagnation in the application cycle, the backend script runs an automated time-delta execution check upon boot. Utilizing Python's native `datetime` libraries, it maps the temporal vector:
+### 2. Localized NLP Parsing Strategy
+The application utilizes a local HTTP pipeline connecting to **Ollama**. Using structural prompt engineering, local LLM instances (Llama 3 or Phi-3) parse unformatted, raw text. It programmatically extracts company names, roles, and key details into clean, structured JSON.
+
+### 3. 🎯 AI Interview Prep Guide
+Integrated directly into the dashboard, this feature uses the local LLM to generate tailored interview questions and preparation guides based on the specific company, role, and application notes stored in the database.
+
+### 4. Automated Application Aging Matrix
+To eliminate stagnation, the system calculates the time elapsed since each application:
 $$\Delta t = t_{\text{current}} - t_{\text{applied}}$$
-If $\Delta t > 7\text{ days}$ and the state remains marked as `Applied`, the system flags the row and triggers a proactive terminal alert notifying the user to follow up with the target company.
+If $\Delta t > 7\text{ days}$ and the state is `Applied`, the system triggers a proactive alert in both the CLI and the Dashboard to prompt follow-up action.
 
-### 3. Interactive Web UI Dashboard
-Built using **Streamlit**, the application reads the flat-file CSV repository into a Pandas DataFrame and serves a live browser dashboard. It displays real-time key performance indicators (KPIs) tracking aggregate metrics (Total Applications, Pending Responses, Scheduled Interviews) alongside an interactive, scrollable data table with built-in multi-column sorting and natural text filtering capabilities.
+### 5. Interactive Web UI Dashboard
+Built using **Streamlit**, the dashboard provides:
+*   **Real-time KPIs:** Total applications, active pipelines, and interview counts.
+*   **Interactive Data Editor:** Edit application statuses or notes directly in the browser and save back to the CSV.
+*   **Stagnant App Alerts:** Visual warnings for applications requiring immediate touchpoints.
 
 ---
 
 ## 🛠️ Tech Stack & Dependencies
 * **Core Language:** Python 3
 * **Data Processing:** Pandas, JSON, Datetime
-* **Local Inference Client:** Ollama (Llama 3 / Phi-3 mini)
+* **Local Inference Client:** Ollama (Llama 3 / Phi-3)
 * **Frontend Web Framework:** Streamlit
 * **Database Engine:** Local Flat-File CSV Matrix
+* **Email Protocols:** IMAP (via `imaplib`)
 
 ---
 
 ## 📁 Repository Structure
 ```text
-ai-job-tracker/
+Application-Tracker/
 │
 ├── tracker.py          # CLI Data Entry Client & Ollama AI Ingestion Engine
-├── dashboard.py        # Streamlit Web Application Code (KPIs & Data Grid)
-├── .gitignore          # Environment & Personal Data Protection Rules
-└── README.md           # Technical Documentation & System Blueprint
-
+├── dashboard.py        # Streamlit Web Application (KPIs, Data Editor, AI Prep)
+├── email_listener.py   # Automated IMAP monitor for fetching email applications
+├── repair_csv.py       # Data integrity utility for fixing malformed CSV rows
+├── my_applications.csv # Local CSV database (Git-ignored)
+├── .env                # Private email credentials (Git-ignored)
+└── README.md           # Technical Documentation
 ```
+
 ---
 
 ## 🚀 Step-by-Step Execution Guide
 
 ### 1. Initialize the Local AI Server
-
-Ensure you have downloaded [Ollama](https://ollama.com/) onto your machine. Launch your terminal and boot up the local LLM model instance:
-
+Download [Ollama](https://ollama.com/) and boot up your preferred model:
 ```bash
-ollama run phi3
-
+ollama run llama3
 ```
 
-*(Leave this terminal window running in the background as your local AI inference server).*
-
-### 2. Install Python Packages
-
-Open a separate terminal window inside the project directory and install the necessary data libraries:
-
+### 2. Environment Setup
+Install the necessary Python packages:
 ```bash
-pip install pandas streamlit requests
-
+pip install pandas streamlit requests python-dotenv
 ```
 
-### 3. Execute the Ingestion CLI
+For the **Email Listener**, create a `.env` file in the root directory:
+```env
+BURNER_EMAIL_ADDRESS="your-email@gmail.com"
+BURNER_APP_PASSWORD="your-app-specific-password"
+```
 
-Run the ingestion program to add a manual entry or paste an email draft for automatic AI extraction:
+### 3. Usage Workflows
 
+**Option A: Manual/Text Ingestion**
+Run the ingestion program to add a manual entry or paste an email body for extraction:
 ```bash
 python tracker.py
-
 ```
 
-### 4. Boot the Analytics Dashboard
+**Option B: Automated Email Fetching**
+Listen for new application emails in your burner inbox:
+```bash
+python email_listener.py
+```
 
-Launch the interactive browser application to visually analyze, filter, and track your ongoing application cycles:
-
+**Option C: Launch the Dashboard**
+Analyze your progress and generate interview prep guides:
 ```bash
 streamlit run dashboard.py
-
 ```
 
-This will automatically initialize a local web server and open the UI dashboard inside your web browser at `http://localhost:8501`.
-
-```
-
+### 4. Data Maintenance
+If your CSV becomes malformed due to manual edits or parsing edge cases, run the repair utility:
+```bash
+python repair_csv.py
 ```

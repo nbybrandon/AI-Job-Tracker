@@ -87,6 +87,37 @@ def parse_email_with_llm(subject, email_text):
         print(f"❌ Structural Inference Failure: {e}")
         return None
 
+def generate_interview_questions(company, role, notes):
+    """
+    Generates tailored interview questions based on company, role, and application notes.
+    """
+    prompt = f"""
+    You are a professional career coach and technical recruiter. 
+    I have an upcoming interview with {company} for the {role} position.
+    
+    Context about my application/submission:
+    {notes}
+    
+    Based on this, please generate:
+    1. A brief "About the Company" summary.
+    2. 3 tailored Behavioral questions (STAR method focus).
+    3. 3 Technical or Role-specific questions likely to be asked.
+    4. A "Pro-Tip" for this specific company or role.
+    
+    Format the output using clear Markdown headings and bullet points.
+    """
+    
+    print(f"\n🧠 Generating Interview Prep Guide for {company}...")
+    try:
+        response = requests.post(OLLAMA_URL, json={
+            "model": "llama3",
+            "prompt": prompt,
+            "stream": False
+        })
+        return response.json()['response']
+    except Exception as e:
+        return f"❌ Failed to generate prep guide: {e}"
+
 def save_to_csv(data_dict):
     """
     Safely appends a flat data row into the standard database schema, wrapping fields in quotes.

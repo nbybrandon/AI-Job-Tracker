@@ -3,6 +3,7 @@ import streamlit as st
 import pandas as pd
 import os
 from datetime import datetime
+from tracker import generate_interview_questions
 
 st.set_page_config(page_title="Job Tracker Dashboard", layout="wide")
 
@@ -18,6 +19,28 @@ else:
     df = pd.read_csv(FILE_NAME, on_bad_lines='skip')
     df.columns = df.columns.str.strip()
     
+    # --- SIDEBAR: INTERVIEW PREP ---
+    st.sidebar.header("🎯 AI Interview Prep")
+    if not df.empty:
+        app_list = [f"{row['Company']} - {row['Role']}" for _, row in df.iterrows()]
+        selected_app = st.sidebar.selectbox("Select Application", app_list)
+        
+        if st.sidebar.button("Generate Prep Guide"):
+            # Find the selected row
+            idx = app_list.index(selected_app)
+            target_row = df.iloc[idx]
+            
+            with st.spinner(f"Consulting AI coach for {target_row['Company']}..."):
+                prep_guide = generate_interview_questions(
+                    target_row['Company'], 
+                    target_row['Role'], 
+                    target_row['Notes']
+                )
+                st.sidebar.markdown("---")
+                st.sidebar.markdown(prep_guide)
+    else:
+        st.sidebar.info("Add applications to enable Interview Prep.")
+
     # --- AUTOMATED AGING CALCULATIONS ---
     try:
         df['Date Applied'] = pd.to_datetime(df['Date Applied'], errors='coerce')
@@ -61,8 +84,9 @@ else:
 
     # --- MASTER INTERACTIVE DATA TABLE ---
     st.subheader("Master Job List")
-    st.markdown("Click column headers to sort, or use the search icon in the top right of the table to isolate specific records.")
+    st.markdown("Edit your application details directly in the table below and click 'Save Changes'.")
     
+    # We use a copy for display to avoid messing with types before editing
     display_df = df.copy()
     if 'Date Applied' in display_df.columns and pd.api.types.is_datetime64_any_dtype(display_df['Date Applied']):
         display_df['Date Applied'] = display_df['Date Applied'].dt.strftime('%Y-%m-%d').fillna('N/A')
@@ -70,9 +94,22 @@ else:
     if 'Days Elapsed' in display_df.columns:
         display_df = display_df.drop(columns=['Days Elapsed'])
 
-    st.dataframe(
+    # Data Editor
+    edited_df = st.data_editor(
         display_df,
         use_container_width=True,
         hide_index=True,
+        num_rows="dynamic",
         height=500
     )
+
+    if st.button("💾 Save Changes to CSV"):
+        try:
+            # We save the edited_df back to the file.
+            # Note: If date formatting was changed for display, it might be saved as string.
+            # But the user can also edit the date.
+            edited_df.to_csv(FILE_NAME, index=False, encoding='utf-8')
+            st.success("State Storage Synchronized! Database updated successfully.")
+            st.rerun()
+        except Exception as e:
+            st.error(f"Failed to save changes: {e}")

@@ -24,7 +24,7 @@ def run_aging_analysis():
         today = pd.Timestamp(datetime.now().date())
         df['Days Elapsed'] = (today - df['Date Applied']).dt.days
         
-        pending_statuses = ['Applied', 'Waiting on Reply']
+        pending_statuses = ['Applied', 'Waiting on Reply', 'Follow Up', 'No Response']
         stagnant_apps = df[
             (df['Days Elapsed'] >= 7) & 
             (df['Status'].str.strip().isin(pending_statuses))

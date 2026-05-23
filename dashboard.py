@@ -47,8 +47,8 @@ else:
         today = pd.Timestamp(datetime.now().date())
         df['Days Elapsed'] = (today - df['Date Applied']).dt.days
         
-        # Stagnant warnings are only for applications that haven't been touched yet
-        pending_statuses = ['Applied', 'Waiting on Reply']
+        # Stagnant warnings are for applications that need attention
+        pending_statuses = ['Applied', 'Waiting on Reply', 'Follow Up', 'No Response']
         stagnant_df = df[
             (df['Days Elapsed'] >= 7) & 
             (df['Status'].str.strip().isin(pending_statuses))
